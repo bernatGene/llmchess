@@ -8,6 +8,7 @@ type CompactPosition =
       status: "active"
       side_to_move: string
       fen: string
+      board: string[]
       legal_moves: Array<{ uci: string; san: string }>
     }
   | { game_id: string; status: "active"; waiting: "human_move" }
@@ -16,6 +17,10 @@ type CompactPosition =
 const gameId = tool.schema.string().min(1).max(128)
 const notation = tool.schema.string().min(1).max(32)
 const explanation = tool.schema.string().trim().min(1).max(500)
+const square = tool.schema.string().regex(/^[a-h][1-8]$/)
+const analysisLine = tool.schema.array(notation).max(3)
+const ANALYSIS_CALL_LIMIT = 2
+const analysisUsage = new Map<string, { fen: string; calls: number }>()
 
 function object(value: unknown): JsonObject | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -92,8 +97,18 @@ function compactPosition(payload: unknown): CompactPosition {
 
   const sideToMove = string(state.turn)
   const fen = string(state.fen)
+  const board = Array.isArray(state.board) ? state.board : undefined
   const moves = Array.isArray(state.legal_moves) ? state.legal_moves : undefined
-  if (!sideToMove || !fen || !moves) throw new Error("llmchess returned an invalid LLM position")
+  if (
+    !sideToMove ||
+    !fen ||
+    !board ||
+    board.length !== 8 ||
+    !board.every((row) => typeof row === "string" && row.length === 8) ||
+    !moves
+  ) {
+    throw new Error("llmchess returned an invalid LLM position")
+  }
 
   const legalMoves = moves.map((move) => {
     const entry = object(move)
@@ -102,7 +117,25 @@ function compactPosition(payload: unknown): CompactPosition {
     if (!uci || !san) throw new Error("llmchess returned an invalid legal move")
     return { uci, san }
   })
-  return { game_id: id, status: "active", side_to_move: sideToMove, fen, legal_moves: legalMoves }
+  return { game_id: id, status: "active", side_to_move: sideToMove, fen, board, legal_moves: legalMoves }
+}
+
+function boundedAnalysis(payload: unknown): JsonObject {
+  const state = object(payload)
+  const id = string(state?.game_id)
+  const baseFen = string(state?.base_fen)
+  if (!state || !id || !baseFen) throw new Error("llmchess returned invalid analysis data")
+
+  const usage = analysisUsage.get(id)
+  const calls = usage?.fen === baseFen ? usage.calls : 0
+  if (calls >= ANALYSIS_CALL_LIMIT) {
+    throw new Error("analysis call limit reached for this turn")
+  }
+  const nextCalls = calls + 1
+  analysisUsage.set(id, { fen: baseFen, calls: nextCalls })
+
+  const { base_fen: _, ...result } = state
+  return { ...result, analysis_calls_remaining: ANALYSIS_CALL_LIMIT - nextCalls }
 }
 
 function output(value: object): string {
@@ -163,5 +196,27 @@ export const llm_move = tool({
       throw new Error("llmchess returned an unknown expected actor")
     }
     return output({ accepted: { uci, san }, next_actor: nextActor })
+  },
+})
+
+export const try_line = tool({
+  description:
+    "Try a non-persistent legal line of one to three plies and see the resulting compact position. Shares a two-call budget per LLM turn with chess_piece_moves.",
+  args: { game_id: gameId, moves: analysisLine.min(1) },
+  async execute(args, context) {
+    return output(
+      boundedAnalysis(await runCli(["try-line", args.game_id, ...args.moves], context.worktree)),
+    )
+  },
+})
+
+export const piece_moves = tool({
+  description:
+    "See one piece's attacked squares and current legal moves, optionally after a non-persistent line of up to three plies. Shares a two-call budget per LLM turn with chess_try_line.",
+  args: { game_id: gameId, square, line: analysisLine },
+  async execute(args, context) {
+    const cliArgs = ["piece-moves", args.game_id, args.square]
+    if (args.line.length) cliArgs.push("--line", ...args.line)
+    return output(boundedAnalysis(await runCli(cliArgs, context.worktree)))
   },
 })

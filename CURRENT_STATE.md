@@ -13,8 +13,10 @@ view, not the individual task at hand.
   and listing; SAN and UCI moves are validated by `python-chess`
 - OpenCode `/chess` command and restricted `chess-player` agent for creating and
   resuming games through compact custom tools
-- Agent position responses contain only the current FEN and legal moves, while
-  the human can run a live board display in a separate terminal
+- Agent position responses contain FEN, compact ASCII occupancy, and legal moves,
+  while the human can run a live board display in a separate terminal
+- The chess agent has two shared, non-persistent analysis calls per LLM turn for
+  trying lines up to three plies or inspecting one piece's moves and attacks
 - LLM moves retain concise public chess explanations and an optional model ID
 - Tooling: `uv`, `ruff` (formatter/linter), `ty` (type checker), and `pytest`
 

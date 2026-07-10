@@ -9,6 +9,7 @@ from llmchess.cli import main
 from llmchess.game import apply_move
 from llmchess.models import Actor, Color, Game
 from llmchess.render import render_board
+from llmchess.store import JsonGameStore
 
 
 def test_board_rendering_uses_ascii_by_default_and_unicode_when_requested() -> None:
@@ -111,6 +112,32 @@ def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, monkeypatch, 
         "error": "expected human actor for white",
         "type": "MoveError",
     }
+
+
+def test_cli_analysis_shows_board_and_piece_attacks_without_persisting(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    game = Game(
+        id="analysis",
+        human_color=Color.WHITE,
+        initial_fen="rn1qkb1r/ppN1pppp/2p2n2/3p1b2/3P1B2/8/PPP1PPPP/R2QKBNR b KQkq - 1 5",
+    )
+    store = JsonGameStore()
+    store.create(game)
+    saved = store.path_for(game.id).read_text(encoding="utf-8")
+
+    assert main(["try-line", game.id, "d8c7", "--json"]) == 0
+    tried = json.loads(capsys.readouterr().out)
+    assert tried["board"][1] == "ppq.pppp"
+    assert {move["san"] for move in tried["legal_moves"]} >= {"Bxc7"}
+
+    assert main(["piece-moves", game.id, "f4", "--json"]) == 0
+    piece = json.loads(capsys.readouterr().out)
+    assert piece["piece"] == "white bishop"
+    assert {"e5", "d6", "c7"} <= set(piece["attacks"])
+    assert piece["legal_moves"] == []
+    assert store.path_for(game.id).read_text(encoding="utf-8") == saved
 
 
 def test_live_frame_shows_latest_move_and_explanation_before_board(monkeypatch) -> None:

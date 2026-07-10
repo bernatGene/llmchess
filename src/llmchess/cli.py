@@ -6,9 +6,10 @@ import sys
 import time
 from collections.abc import Sequence
 
+import chess
 from rich.console import Console
 
-from .game import actor_for, apply_move, board_for
+from .game import actor_for, apply_move, board_after_line, board_for
 from .models import Actor, Color, Game, GameStatus
 from .render import render_board, render_game, transcript_table
 from .store import GameStoreError, JsonGameStore
@@ -55,6 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
     move.add_argument("--model", help="optional model identifier")
     _add_json_flag(move)
 
+    try_line = commands.add_parser("try-line", help="inspect a non-persistent move line")
+    try_line.add_argument("game_id")
+    try_line.add_argument("notations", nargs="+")
+    _add_json_flag(try_line)
+
+    piece_moves = commands.add_parser(
+        "piece-moves", help="inspect one piece after an optional line"
+    )
+    piece_moves.add_argument("game_id")
+    piece_moves.add_argument("square")
+    piece_moves.add_argument("--line", nargs="*", default=[])
+    _add_json_flag(piece_moves)
+
     show = commands.add_parser("show", help="render the board and transcript")
     show.add_argument("game_id")
     show.add_argument("--perspective", choices=Color, type=Color)
@@ -75,16 +89,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _board_rows(board: chess.Board) -> list[str]:
+    def symbol(file_index: int, rank_index: int) -> str:
+        piece = board.piece_at(chess.square(file_index, rank_index))
+        return piece.symbol() if piece else "."
+
+    return [
+        "".join(symbol(file_index, rank_index) for file_index in range(8))
+        for rank_index in range(7, -1, -1)
+    ]
+
+
+def _position(board: chess.Board) -> dict[str, object]:
+    legal_moves = [{"uci": move.uci(), "san": board.san(move)} for move in board.legal_moves]
+    return {
+        "fen": board.fen(),
+        "board": _board_rows(board),
+        "side_to_move": Color.from_chess(board.turn).value,
+        "legal_moves": legal_moves,
+    }
+
+
 def _state(game: Game) -> dict[str, object]:
     board = board_for(game)
     turn = Color.from_chess(board.turn)
-    legal_moves = [{"uci": move.uci(), "san": board.san(move)} for move in board.legal_moves]
     return {
         **game.to_dict(),
-        "fen": board.fen(),
+        **_position(board),
         "turn": turn.value if game.status is GameStatus.ACTIVE else None,
         "expected_actor": actor_for(game, turn).value if game.status is GameStatus.ACTIVE else None,
-        "legal_moves": legal_moves,
         "last_move": game.plies[-1].to_dict() if game.plies else None,
     }
 
@@ -256,6 +289,49 @@ def _run(args: argparse.Namespace, console: Console) -> None:
         else:
             console.print(f"Move accepted: {ply.san} ({ply.uci})", style="green")
             _summary(game, console)
+        return
+
+    if args.command == "try-line":
+        base_fen = board_for(game).fen()
+        board = board_after_line(game, args.notations)
+        _emit_json({"game_id": game.id, "base_fen": base_fen, **_position(board)})
+        return
+
+    if args.command == "piece-moves":
+        base_board = board_for(game)
+        board = board_after_line(game, args.line) if args.line else base_board
+        if game.status is GameStatus.TERMINAL:
+            raise ValueError("game is terminal")
+        turn = Color.from_chess(base_board.turn)
+        if actor_for(game, turn) is not Actor.LLM:
+            raise ValueError(f"expected human actor for {turn.value}")
+        try:
+            square = chess.parse_square(args.square)
+        except ValueError as error:
+            raise ValueError(f"invalid square: {args.square}") from error
+        piece = board.piece_at(square)
+        if piece is None:
+            raise ValueError(f"no piece on {args.square}")
+        legal_moves = [
+            {"uci": move.uci(), "san": board.san(move)}
+            for move in board.legal_moves
+            if move.from_square == square
+        ]
+        _emit_json(
+            {
+                "game_id": game.id,
+                "base_fen": base_board.fen(),
+                "fen": board.fen(),
+                "board": _board_rows(board),
+                "side_to_move": Color.from_chess(board.turn).value,
+                "piece": (
+                    f"{'white' if piece.color else 'black'} {chess.piece_name(piece.piece_type)}"
+                ),
+                "square": args.square,
+                "attacks": [chess.square_name(target) for target in sorted(board.attacks(square))],
+                "legal_moves": legal_moves,
+            }
+        )
         return
 
     if args.command == "show":

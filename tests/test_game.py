@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from llmchess.game import MoveError, actor_for, apply_move, board_for
+from llmchess.game import MoveError, actor_for, apply_move, board_after_line, board_for
 from llmchess.models import (
     Actor,
     Color,
@@ -97,3 +97,27 @@ def test_replay_rejects_noncanonical_serialized_san() -> None:
 
     with pytest.raises(GameValidationError):
         Game.from_dict(payload)
+
+
+def test_hypothetical_line_exposes_replies_without_mutating_game() -> None:
+    game = Game(
+        id="analysis",
+        human_color=Color.WHITE,
+        initial_fen="rn1qkb1r/ppN1pppp/2p2n2/3p1b2/3P1B2/8/PPP1PPPP/R2QKBNR b KQkq - 1 5",
+    )
+    before = deepcopy(game.to_dict())
+
+    board = board_after_line(game, ["d8c7"])
+
+    assert "Bxc7" in {board.san(move) for move in board.legal_moves}
+    assert game.to_dict() == before
+
+
+def test_hypothetical_line_is_bounded_and_only_available_on_llm_turn() -> None:
+    llm_turn = Game(id="llm", human_color=Color.BLACK)
+    human_turn = Game(id="human", human_color=Color.WHITE)
+
+    with pytest.raises(MoveError, match="limited to 3 plies"):
+        board_after_line(llm_turn, ["e4", "e5", "Nf3", "Nc6"])
+    with pytest.raises(MoveError, match="expected human actor"):
+        board_after_line(human_turn, ["e4"])

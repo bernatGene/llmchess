@@ -62,6 +62,26 @@ def _move_from_notation(board: chess.Board, notation: str) -> chess.Move:
         raise MoveError(f"illegal or invalid move: {notation}") from error
 
 
+def board_after_line(game: Game, notations: list[str], *, max_plies: int = 3) -> chess.Board:
+    """Return a board after a bounded hypothetical line without mutating the game."""
+    board = board_for(game)
+    if game.status is GameStatus.TERMINAL:
+        raise MoveError("game is terminal")
+    turn = Color.from_chess(board.turn)
+    if actor_for(game, turn) is not Actor.LLM:
+        raise MoveError(f"expected human actor for {turn.value}")
+    if not notations:
+        raise MoveError("analysis line requires at least one move")
+    if len(notations) > max_plies:
+        raise MoveError(f"analysis line is limited to {max_plies} plies")
+
+    for notation in notations:
+        if board.is_game_over(claim_draw=True):
+            raise MoveError("analysis line continues after a terminal position")
+        board.push(_move_from_notation(board, notation))
+    return board
+
+
 def _set_outcome(game: Game, board: chess.Board) -> None:
     outcome = board.outcome(claim_draw=True)
     if outcome is None:
