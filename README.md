@@ -94,12 +94,12 @@ machine-readable output. `live` is the human-facing exception: it watches a
 game until completion or Ctrl-C and redraws when the position changes.
 
 ```text
-llmchess new [--human white|black] [--unicode] [--json]
+llmchess new [--human white|black] [--unicode|--large] [--json]
 llmchess list [--json]
 llmchess state GAME_ID [--json]
 llmchess move GAME_ID MOVE --actor human|llm [--explanation TEXT] [--model ID] [--json]
-llmchess show GAME_ID [--perspective white|black] [--unicode] [--json]
-llmchess live GAME_ID [--perspective white|black] [--unicode]
+llmchess show GAME_ID [--perspective white|black] [--unicode|--large] [--json]
+llmchess live GAME_ID [--perspective white|black] [--unicode|--large]
 llmchess transcript GAME_ID [--json]
 ```
 
@@ -110,8 +110,10 @@ model identifier. `state --json` includes the current FEN, expected actor,
 canonical legal moves, and latest recorded move.
 
 Board-producing commands use ASCII piece letters by default. Add `--unicode` to
-`new`, `show`, or `live` to render standard Unicode chess symbols such as `♔`
-and `♟`; these do not require a Nerd Font.
+`new`, `show`, or `live` to render filled Unicode chess symbols colored for each
+side. Alternatively, `--large` renders each square as an 8-column by 4-row area
+with pixel-art pieces loaded from the 8-by-8 masks in `src/llmchess/pieces/`.
+The two display options are mutually exclusive and neither requires a Nerd Font.
 
 The display clears and redraws after each saved move. The latest move and its
 public explanation appear first, followed by the status and board, so the

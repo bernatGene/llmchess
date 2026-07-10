@@ -21,19 +21,39 @@ def test_board_rendering_uses_ascii_by_default_and_unicode_when_requested() -> N
         Console(file=unicode_stream, force_terminal=False),
         unicode_pieces=True,
     )
-
     assert "K" in ascii_stream.getvalue()
-    assert "♔" not in ascii_stream.getvalue()
-    assert "♔" in unicode_stream.getvalue()
+    assert "♚" not in ascii_stream.getvalue()
     assert "♚" in unicode_stream.getvalue()
+    assert "♔" not in unicode_stream.getvalue()
 
 
-def test_unicode_flag_is_available_on_all_board_commands() -> None:
+def test_large_board_uses_multicell_pixel_art() -> None:
+    stream = StringIO()
+
+    render_board(
+        chess.Board(),
+        Console(file=stream, force_terminal=False, width=100),
+        large_pieces=True,
+    )
+
+    rendered = stream.getvalue()
+    assert "▀" in rendered
+    assert "▄" in rendered
+    assert "█" in rendered
+    assert len(rendered.splitlines()) == 34
+    assert len(rendered.splitlines()[1]) >= 66
+    assert " " not in rendered.splitlines()[1].strip()
+
+
+def test_board_style_flags_are_available_on_all_board_commands() -> None:
     parser = cli.build_parser()
 
     assert parser.parse_args(["new", "--unicode"]).unicode_pieces is True
     assert parser.parse_args(["show", "game-id", "--unicode"]).unicode_pieces is True
     assert parser.parse_args(["live", "game-id", "--unicode"]).unicode_pieces is True
+    assert parser.parse_args(["new", "--large"]).large_pieces is True
+    assert parser.parse_args(["show", "game-id", "--large"]).large_pieces is True
+    assert parser.parse_args(["live", "game-id", "--large"]).large_pieces is True
 
 
 def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, monkeypatch, capsys) -> None:
