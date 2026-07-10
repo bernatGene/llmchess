@@ -1,14 +1,20 @@
 [project]
 name = "llmchess"
 version = "0.1.0"
-description = "Add your description here"
+description = "A chess harness for playing against an OpenCode LLM agent"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
-    "prompt-toolkit>=3.0.52",
     "python-chess>=1.999",
     "rich>=14.3.3",
 ]
+
+[project.scripts]
+llmchess = "llmchess.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -19,7 +25,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -28,4 +34,4 @@ select = ["E", "F", "I", "UP", "B"]
 quote-style = "double"
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+testpaths = ["tests"]

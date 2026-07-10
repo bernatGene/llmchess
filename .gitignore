@@ -8,3 +8,19 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local chess runtime data (legacy and current formats)
+.llmchess_history*
+.llmchess_session*.json
+games/
+.llmchess/
+.llmchess-data/
+.llmchess_data/
+
+# Tool and editor caches
+.pytest_cache/
+.ruff_cache/
+.ty/
+.mypy_cache/
+.cache/
+node_modules/

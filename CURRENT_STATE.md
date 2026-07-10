@@ -8,12 +8,22 @@ view, not the individual task at hand.
 
 ## State summary
 
-- Scaffolding from `uv init` with runtime and dev toolchain configured
-- Dependencies: `python-chess`, `prompt_toolkit`, `rich`
-- Tooling: `ruff` (formatter/linter), `ty` (type checker)
-- CLI MVP loop in `main.py` with commands, SAN moves, and autocomplete
+- Persistent local human-vs-LLM chess games, stored as validated JSON files
+- Finite CLI commands for game creation, state, moves, rendering, transcripts,
+  and listing; SAN and UCI moves are validated by `python-chess`
+- OpenCode `/chess` command and restricted `chess-player` agent for creating and
+  resuming games through the CLI
+- LLM moves retain concise public chess explanations and an optional model ID
+- Tooling: `uv`, `ruff` (formatter/linter), `ty` (type checker), and `pytest`
 
 
 ## Current objective
 
-CLI structure and game state foundations
+Make the persistent local game flow reliable, understandable, and easy for
+humans and OpenCode agents to use.
+
+## Superseded direction
+
+The earlier multiplayer/session/watchdog direction has been replaced by
+persistent, single-process human-vs-LLM games. There is no multiplayer lobby,
+session lifecycle, or watchdog service in the current architecture.
