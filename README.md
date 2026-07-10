@@ -4,12 +4,27 @@
 LLM through OpenCode. `python-chess` is the rules authority: every recorded move
 is replayed and validated before it is shown or extended.
 
-## Install and run
+## TL;DR: play against the LLM
+
+From the repository, install the dependencies once:
 
 ```sh
 uv sync
-uv run llmchess new --human white
 ```
+
+Open two side-by-side terminals in the repository:
+
+1. In the first terminal, start OpenCode with `opencode`, then enter `/chess white`
+   or `/chess black` in the chat.
+2. OpenCode creates the game and shows its `GAME_ID`. In the second terminal,
+   run `uv run llmchess live GAME_ID` to display the board.
+3. Enter your moves in the OpenCode chat, for example `e4`, `Nf3`, or `e2e4`.
+   OpenCode plays the LLM's replies, while the second terminal updates the board.
+
+To continue an existing game, start OpenCode and enter `/chess GAME_ID`, then
+run the same `live` command in the other terminal.
+
+## Install and storage
 
 Games are JSON files under the platform user data directory by default. Set
 `LLMCHESS_DATA_DIR` or pass `--data-dir PATH` before the subcommand to use
@@ -44,12 +59,6 @@ the human can only move their chosen color and the LLM moves the other color.
 LLM moves require a non-empty `--explanation`; `--model` records an optional
 model identifier. `state --json` includes the current FEN, expected actor,
 canonical legal moves, and latest recorded move.
-
-For a player display in a second terminal, start:
-
-```sh
-uv run llmchess live GAME_ID
-```
 
 The display clears and redraws after each saved move. The latest move and its
 public explanation appear first, followed by the status and board, so the
