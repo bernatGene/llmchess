@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from rich.console import Console
 
 from .game import actor_for, apply_move, board_for
 from .models import Actor, Color, Game, GameStatus
-from .render import render_game, transcript_table
+from .render import render_board, render_game, transcript_table
 from .store import GameStoreError, JsonGameStore
 
 
@@ -43,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("game_id")
     show.add_argument("--perspective", choices=Color, type=Color)
     _add_json_flag(show)
+
+    live = commands.add_parser("live", help="watch a game and redraw the latest position")
+    live.add_argument("game_id")
+    live.add_argument("--perspective", choices=Color, type=Color)
 
     transcript = commands.add_parser("transcript", help="show all recorded moves")
     transcript.add_argument("game_id")
@@ -92,6 +97,51 @@ def _summary(game: Game, console: Console) -> None:
 
 def _store(args: argparse.Namespace) -> JsonGameStore:
     return JsonGameStore(args.data_dir)
+
+
+def _live_frame(
+    game: Game,
+    console: Console,
+    perspective: Color,
+    first_ply: int,
+) -> None:
+    console.clear()
+    for index, ply in enumerate(game.plies[first_ply:], start=first_ply):
+        move_number = index // 2 + 1
+        marker = "." if ply.color is Color.WHITE else "..."
+        console.print(
+            f"{move_number}{marker} {ply.san} ({ply.actor.value})",
+            style="bold green" if ply.actor is Actor.LLM else "bold",
+        )
+        if ply.explanation:
+            console.print(ply.explanation)
+    _summary(game, console)
+    render_board(board_for(game), console, perspective)
+
+
+def _live(store: JsonGameStore, game: Game, console: Console, perspective: Color) -> None:
+    first_ply = max(0, len(game.plies) - 1)
+    _live_frame(game, console, perspective, first_ply)
+    if game.status is GameStatus.TERMINAL:
+        return
+
+    try:
+        while True:
+            time.sleep(0.25)
+            updated = store.load(game.id)
+            if updated == game:
+                continue
+            first_ply = (
+                len(game.plies)
+                if updated.plies[: len(game.plies)] == game.plies
+                else max(0, len(updated.plies) - 1)
+            )
+            game = updated
+            _live_frame(game, console, perspective, first_ply)
+            if game.status is GameStatus.TERMINAL:
+                return
+    except KeyboardInterrupt:
+        return
 
 
 def _run(args: argparse.Namespace, console: Console) -> None:
@@ -164,6 +214,10 @@ def _run(args: argparse.Namespace, console: Console) -> None:
         else:
             _summary(game, console)
             render_game(game, console, args.perspective or game.human_color)
+        return
+
+    if args.command == "live":
+        _live(store, game, console, args.perspective or game.human_color)
         return
 
     if args.command == "transcript":

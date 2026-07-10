@@ -12,7 +12,9 @@ view, not the individual task at hand.
 - Finite CLI commands for game creation, state, moves, rendering, transcripts,
   and listing; SAN and UCI moves are validated by `python-chess`
 - OpenCode `/chess` command and restricted `chess-player` agent for creating and
-  resuming games through the CLI
+  resuming games through compact custom tools
+- Agent position responses contain only the current FEN and legal moves, while
+  the human can run a live board display in a separate terminal
 - LLM moves retain concise public chess explanations and an optional model ID
 - Tooling: `uv`, `ruff` (formatter/linter), `ty` (type checker), and `pytest`
 

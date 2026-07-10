@@ -23,10 +23,11 @@ On macOS the default is `~/Library/Application Support/llmchess/games`; on other
 Unix systems it is `$XDG_DATA_HOME/llmchess/games` or
 `~/.local/share/llmchess/games`.
 
-## Finite CLI commands
+## CLI commands
 
-The CLI is intentionally non-interactive. Each invocation performs one bounded
-operation; add `--json` to any subcommand for machine-readable output.
+Most commands perform one bounded operation; add `--json` where supported for
+machine-readable output. `live` is the human-facing exception: it watches a
+game until completion or Ctrl-C and redraws when the position changes.
 
 ```text
 llmchess new [--human white|black] [--json]
@@ -34,6 +35,7 @@ llmchess list [--json]
 llmchess state GAME_ID [--json]
 llmchess move GAME_ID MOVE --actor human|llm [--explanation TEXT] [--model ID] [--json]
 llmchess show GAME_ID [--perspective white|black] [--json]
+llmchess live GAME_ID [--perspective white|black]
 llmchess transcript GAME_ID [--json]
 ```
 
@@ -42,6 +44,17 @@ the human can only move their chosen color and the LLM moves the other color.
 LLM moves require a non-empty `--explanation`; `--model` records an optional
 model identifier. `state --json` includes the current FEN, expected actor,
 canonical legal moves, and latest recorded move.
+
+For a player display in a second terminal, start:
+
+```sh
+uv run llmchess live GAME_ID
+```
+
+The display clears and redraws after each saved move. The latest move and its
+public explanation appear first, followed by the status and board, so the
+current position remains at the bottom of the terminal. Regular `show` output
+also places the board after the transcript.
 
 ## OpenCode chess play
 
@@ -56,10 +69,13 @@ installing or changing this configuration. In OpenCode, use:
 ```
 
 With no argument, `/chess` asks which color the human wants. With a color it
-creates a game; with an ID it resumes that game. The agent is restricted to the
-finite `uv run llmchess ...` interface. It refreshes state before an LLM move,
-selects from the reported legal moves, records the move, and renders the result.
-Switch to OpenCode's `build` agent when working on the application itself.
+creates a game; with an ID it resumes that game. The agent is restricted to four
+project-local chess tools. Those tools retain CLI validation but return only the
+current FEN and legal UCI/SAN moves when the LLM must play; they never return the
+complete transcript or old explanations. A submitted human move directly
+returns the resulting LLM position, avoiding a redundant state refresh. Use
+`llmchess live GAME_ID` for the board display and switch to OpenCode's `build`
+agent when working on the application itself.
 
 LLM move explanations are deliberately public, concise chess summaries in this
 form:
@@ -80,6 +96,7 @@ to the player and stored with the LLM move in the transcript.
 - `src/llmchess/store.py` persists one game per JSON file using atomic file
   replacement.
 - `src/llmchess/render.py` provides Rich board and transcript output.
+- `.opencode/tools/chess.ts` exposes compact, validated tools to the chess agent.
 
 ## Development
 
@@ -96,7 +113,7 @@ uv run pytest
 - Persistence is local JSON and is intended for a single process or best-effort
   local use; it provides no concurrency or multi-user coordination guarantees.
 - There is no network service, multiplayer lobby/session protocol, watchdog, or
-  interactive terminal game loop. Persistent human-vs-LLM games replace those
-  earlier concepts.
+  interactive move-entry loop. Persistent human-vs-LLM games and the read-only
+  `live` display replace those earlier concepts.
 - Standard chess positions and outcomes are supported through `python-chess`;
   clocks, engine analysis, authentication, and remote game sharing are not.

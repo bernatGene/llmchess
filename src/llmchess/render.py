@@ -54,5 +54,5 @@ def transcript_table(game: Game) -> Table:
 
 
 def render_game(game: Game, console: Console, perspective: Color = Color.WHITE) -> None:
-    render_board(board_for(game), console, perspective)
     console.print(transcript_table(game))
+    render_board(board_for(game), console, perspective)

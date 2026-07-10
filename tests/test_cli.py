@@ -1,6 +1,12 @@
 import json
+from io import StringIO
 
+from rich.console import Console
+
+import llmchess.cli as cli
 from llmchess.cli import main
+from llmchess.game import apply_move
+from llmchess.models import Actor, Color, Game
 
 
 def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, capsys) -> None:
@@ -63,3 +69,51 @@ def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, capsys) -> No
         "error": "expected human actor for white",
         "type": "MoveError",
     }
+
+
+def test_live_frame_shows_latest_move_and_explanation_before_board(monkeypatch) -> None:
+    game = Game(id="live", human_color=Color.WHITE)
+    apply_move(game, "e4", actor=Actor.HUMAN)
+    explanation = "Position: Balanced | Candidates: e7e5/e5 | Choice: e7e5 controls the center"
+    apply_move(game, "e5", actor=Actor.LLM, explanation=explanation)
+    stream = StringIO()
+    console = Console(file=stream, force_terminal=False, width=100)
+    monkeypatch.setattr(
+        cli,
+        "render_board",
+        lambda board, output, perspective: output.print("BOARD"),
+    )
+
+    cli._live_frame(game, console, Color.WHITE, len(game.plies) - 1)
+
+    rendered = stream.getvalue()
+    assert "1. e4" not in rendered
+    assert rendered.index("1... e5 (llm)") < rendered.index(explanation)
+    assert rendered.index(explanation) < rendered.index("Game live")
+    assert rendered.index("Game live") < rendered.index("BOARD")
+
+
+def test_live_exits_after_redrawing_a_terminal_update(monkeypatch) -> None:
+    active = Game(id="live-terminal", human_color=Color.WHITE)
+    apply_move(active, "f3", actor=Actor.HUMAN)
+    apply_move(active, "e5", actor=Actor.LLM, explanation="Opens the queen.")
+    apply_move(active, "g4", actor=Actor.HUMAN)
+    terminal = Game.from_dict(active.to_dict())
+    apply_move(terminal, "Qh4#", actor=Actor.LLM, explanation="Checkmate.")
+
+    class Store:
+        def load(self, game_id: str) -> Game:
+            assert game_id == active.id
+            return terminal
+
+    frames: list[tuple[int, int]] = []
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        cli,
+        "_live_frame",
+        lambda game, console, perspective, first_ply: frames.append((len(game.plies), first_ply)),
+    )
+
+    cli._live(Store(), active, Console(file=StringIO()), Color.WHITE)  # type: ignore[arg-type]
+
+    assert frames == [(3, 2), (4, 3)]

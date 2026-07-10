@@ -9,7 +9,7 @@ Start or resume a chess game according to `$ARGUMENTS`.
 - With `white` or `black`, create a game with that human color.
 - With a game ID, load and resume that game.
 
-Use only the finite `uv run llmchess ...` interface described by the chess-player
-agent. Show the game ID and current board. If the loaded state says the LLM is to
-move, provide the public explanation and play one legal move immediately. If it
-is the human's turn, ask for their move.
+Use only the compact tools described by the chess-player agent. Report the game
+ID, but leave board rendering to the player's `llmchess live` terminal. If the
+loaded position says the LLM is to move, provide the public explanation and play
+one legal move immediately. If it is the human's turn, ask for their move.
