@@ -11,7 +11,7 @@ from .models import (
     Ply,
     Termination,
 )
-from .store import GameStoreError, JsonGameStore, default_data_dir
+from .store import GameStoreError, JsonGameStore
 
 __all__ = [
     "Actor",
@@ -28,6 +28,5 @@ __all__ = [
     "actor_for",
     "apply_move",
     "board_for",
-    "default_data_dir",
     "synchronize_outcome",
 ]

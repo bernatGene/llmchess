@@ -7,15 +7,19 @@ from llmchess.store import GameStoreError, JsonGameStore
 
 
 @pytest.mark.parametrize("game_id", ["../escape", "nested/game", ".hidden", "name.json"])
-def test_path_for_rejects_unsafe_or_traversing_game_ids(tmp_path, game_id: str) -> None:
-    store = JsonGameStore(tmp_path / "games")
+def test_path_for_rejects_unsafe_or_traversing_game_ids(
+    tmp_path, monkeypatch, game_id: str
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = JsonGameStore()
 
     with pytest.raises(GameStoreError, match="unsafe game id"):
         store.path_for(game_id)
 
 
-def test_store_round_trip_and_rejects_corrupt_json(tmp_path) -> None:
-    store = JsonGameStore(tmp_path / "games")
+def test_store_round_trip_and_rejects_corrupt_json(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = JsonGameStore()
     game = Game(id="round-trip", human_color=Color.BLACK)
     store.create(game)
 
@@ -27,11 +31,18 @@ def test_store_round_trip_and_rejects_corrupt_json(tmp_path) -> None:
         store.load(game.id)
 
 
-def test_store_rejects_structurally_invalid_serialized_game(tmp_path) -> None:
-    store = JsonGameStore(tmp_path / "games")
+def test_store_rejects_structurally_invalid_serialized_game(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = JsonGameStore()
     path = store.path_for("bad-game")
     path.parent.mkdir()
     path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
 
     with pytest.raises(GameStoreError, match="invalid game file"):
         store.load("bad-game")
+
+
+def test_store_uses_repository_games_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert JsonGameStore().base_dir == tmp_path / "games"

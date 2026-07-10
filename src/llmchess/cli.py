@@ -5,7 +5,6 @@ import json
 import sys
 import time
 from collections.abc import Sequence
-from pathlib import Path
 
 from rich.console import Console
 
@@ -21,7 +20,6 @@ def _add_json_flag(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmchess", description="Play chess against an LLM")
-    parser.add_argument("--data-dir", type=Path, help="directory containing game JSON files")
     commands = parser.add_subparsers(dest="command", required=True)
 
     new = commands.add_parser("new", help="create a human-vs-LLM game")
@@ -95,10 +93,6 @@ def _summary(game: Game, console: Console) -> None:
     )
 
 
-def _store(args: argparse.Namespace) -> JsonGameStore:
-    return JsonGameStore(args.data_dir)
-
-
 def _live_frame(
     game: Game,
     console: Console,
@@ -145,7 +139,7 @@ def _live(store: JsonGameStore, game: Game, console: Console, perspective: Color
 
 
 def _run(args: argparse.Namespace, console: Console) -> None:
-    store = _store(args)
+    store = JsonGameStore()
     if args.command == "new":
         game = Game(id=store.generate_id(), human_color=args.human)
         store.create(game)

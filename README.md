@@ -4,39 +4,88 @@
 LLM through OpenCode. `python-chess` is the rules authority: every recorded move
 is replayed and validated before it is shown or extended.
 
-## TL;DR: play against the LLM
+## Requirements
 
-From the repository, install the dependencies once:
+- [Git](https://git-scm.com/) to clone the repository.
+- [uv](https://docs.astral.sh/uv/) to install Python and the project dependencies.
+- [OpenCode](https://opencode.ai/docs/) to run the LLM chess opponent.
+- Access to an LLM provider supported by OpenCode.
+
+You do not need to install Python separately. The project requires Python 3.12
+or newer, and `uv` can download a compatible version while syncing the project.
+
+Install `uv` on macOS or Linux with its standalone installer:
 
 ```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Or use Homebrew:
+
+```sh
+brew install uv
+```
+
+Install OpenCode with its standalone installer:
+
+```sh
+curl -fsSL https://opencode.ai/install | bash
+```
+
+Or use the current OpenCode Homebrew tap:
+
+```sh
+brew install anomalyco/tap/opencode
+```
+
+See the linked official documentation for Windows and other installation
+methods. After either installer finishes, open a new terminal if `uv` or
+`opencode` is not yet on your `PATH`.
+
+## Installation
+
+Clone the repository, enter it, and sync its dependencies:
+
+```sh
+git clone https://github.com/bernatGene/llmchess.git
+cd llmchess
 uv sync
 ```
 
-Open two side-by-side terminals in the repository:
-
-1. In the first terminal, start OpenCode with `opencode`, then enter `/chess white`
-   or `/chess black` in the chat.
-2. OpenCode creates the game and shows its `GAME_ID`. In the second terminal,
-   run `uv run llmchess live GAME_ID` to display the board.
-3. Enter your moves in the OpenCode chat, for example `e4`, `Nf3`, or `e2e4`.
-   OpenCode plays the LLM's replies, while the second terminal updates the board.
-
-To continue an existing game, start OpenCode and enter `/chess GAME_ID`, then
-run the same `live` command in the other terminal.
-
-## Install and storage
-
-Games are JSON files under the platform user data directory by default. Set
-`LLMCHESS_DATA_DIR` or pass `--data-dir PATH` before the subcommand to use
-another games directory:
+The repository already contains its OpenCode project configuration, `/chess`
+command, chess agent, and custom tools. Do not run `/init`; start OpenCode from
+the repository root so it loads this configuration:
 
 ```sh
-uv run llmchess --data-dir .llmchess-data new --human black
+opencode
 ```
 
-On macOS the default is `~/Library/Application Support/llmchess/games`; on other
-Unix systems it is `$XDG_DATA_HOME/llmchess/games` or
-`~/.local/share/llmchess/games`.
+The first time you use OpenCode, connect an LLM provider by entering `/connect`
+and following the prompts. You can use OpenCode Zen or another supported
+provider for which you have credentials. Provider authentication belongs to
+OpenCode and is not stored by this project.
+
+## Play
+
+Open two side-by-side terminals, both in the repository root:
+
+1. In the first terminal, run `opencode`, then enter `/chess white` or
+   `/chess black`.
+2. OpenCode creates the game and reports its `GAME_ID`.
+3. In the second terminal, run `uv run llmchess live GAME_ID` to display the
+   board.
+4. Enter moves in OpenCode using SAN or UCI, for example `e4`, `Nf3`, or
+   `e2e4`. OpenCode plays the LLM replies while the board terminal updates.
+
+To continue an existing game, enter `/chess GAME_ID` in OpenCode and run the
+same `live` command in the second terminal.
+
+## Storage
+
+Games are stored as JSON files in the repository's `games/` directory. This
+directory is gitignored, so games remain local and are not included in commits.
+Always run OpenCode and the CLI from the repository root so every command uses
+the same game store.
 
 ## CLI commands
 

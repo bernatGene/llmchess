@@ -4,24 +4,12 @@ import json
 import os
 import re
 import secrets
-import sys
 import tempfile
 from pathlib import Path
 
 from .models import Game, GameValidationError
 
 _SAFE_ID = re.compile(r"\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\Z")
-
-
-def default_data_dir() -> Path:
-    override = os.environ.get("LLMCHESS_DATA_DIR")
-    if override:
-        return Path(override).expanduser()
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "llmchess" / "games"
-    if data_home := os.environ.get("XDG_DATA_HOME"):
-        return Path(data_home).expanduser() / "llmchess" / "games"
-    return Path.home() / ".local" / "share" / "llmchess" / "games"
 
 
 class GameStoreError(RuntimeError):
@@ -31,8 +19,8 @@ class GameStoreError(RuntimeError):
 class JsonGameStore:
     """JSON files with atomic replacement writes; it makes no concurrency guarantees."""
 
-    def __init__(self, base_dir: Path | str | None = None) -> None:
-        self.base_dir = Path(base_dir) if base_dir is not None else default_data_dir()
+    def __init__(self) -> None:
+        self.base_dir = Path.cwd() / "games"
 
     def generate_id(self) -> str:
         """Generate an identifier suitable for a game filename."""

@@ -9,22 +9,19 @@ from llmchess.game import apply_move
 from llmchess.models import Actor, Color, Game
 
 
-def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, capsys) -> None:
-    data_dir = tmp_path / "games"
+def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
 
-    assert main(["--data-dir", str(data_dir), "new", "--json"]) == 0
+    assert main(["new", "--json"]) == 0
     created = json.loads(capsys.readouterr().out)
     game_id = created["id"]
     assert created["turn"] == "white"
     assert created["expected_actor"] == "human"
 
-    assert main(["--data-dir", str(data_dir), "state", game_id, "--json"]) == 0
+    assert main(["state", game_id, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["plies"] == []
 
-    assert (
-        main(["--data-dir", str(data_dir), "move", game_id, "e2e4", "--actor", "human", "--json"])
-        == 0
-    )
+    assert main(["move", game_id, "e2e4", "--actor", "human", "--json"]) == 0
     human_move = json.loads(capsys.readouterr().out)
     assert human_move["applied"]["san"] == "e4"
 
@@ -32,8 +29,6 @@ def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, capsys) -> No
     assert (
         main(
             [
-                "--data-dir",
-                str(data_dir),
                 "move",
                 game_id,
                 "e7e5",
@@ -49,18 +44,18 @@ def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, capsys) -> No
     llm_move = json.loads(capsys.readouterr().out)
     assert llm_move["applied"]["explanation"] == explanation
 
-    assert main(["--data-dir", str(data_dir), "show", game_id, "--json"]) == 0
+    assert main(["show", game_id, "--json"]) == 0
     shown = json.loads(capsys.readouterr().out)
     assert shown["plies"][-1]["explanation"] == explanation
     assert shown["turn"] == "white"
 
 
-def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, capsys) -> None:
-    data_dir = tmp_path / "games"
-    assert main(["--data-dir", str(data_dir), "new", "--json"]) == 0
+def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert main(["new", "--json"]) == 0
     game_id = json.loads(capsys.readouterr().out)["id"]
 
-    result = main(["--data-dir", str(data_dir), "move", game_id, "e4", "--actor", "llm", "--json"])
+    result = main(["move", game_id, "e4", "--actor", "llm", "--json"])
     captured = capsys.readouterr()
 
     assert result == 1
