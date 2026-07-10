@@ -1,12 +1,39 @@
 import json
 from io import StringIO
 
+import chess
 from rich.console import Console
 
 import llmchess.cli as cli
 from llmchess.cli import main
 from llmchess.game import apply_move
 from llmchess.models import Actor, Color, Game
+from llmchess.render import render_board
+
+
+def test_board_rendering_uses_ascii_by_default_and_unicode_when_requested() -> None:
+    ascii_stream = StringIO()
+    unicode_stream = StringIO()
+
+    render_board(chess.Board(), Console(file=ascii_stream, force_terminal=False))
+    render_board(
+        chess.Board(),
+        Console(file=unicode_stream, force_terminal=False),
+        unicode_pieces=True,
+    )
+
+    assert "K" in ascii_stream.getvalue()
+    assert "♔" not in ascii_stream.getvalue()
+    assert "♔" in unicode_stream.getvalue()
+    assert "♚" in unicode_stream.getvalue()
+
+
+def test_unicode_flag_is_available_on_all_board_commands() -> None:
+    parser = cli.build_parser()
+
+    assert parser.parse_args(["new", "--unicode"]).unicode_pieces is True
+    assert parser.parse_args(["show", "game-id", "--unicode"]).unicode_pieces is True
+    assert parser.parse_args(["live", "game-id", "--unicode"]).unicode_pieces is True
 
 
 def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, monkeypatch, capsys) -> None:
@@ -76,7 +103,7 @@ def test_live_frame_shows_latest_move_and_explanation_before_board(monkeypatch) 
     monkeypatch.setattr(
         cli,
         "render_board",
-        lambda board, output, perspective: output.print("BOARD"),
+        lambda board, output, perspective, **kwargs: output.print("BOARD"),
     )
 
     cli._live_frame(game, console, Color.WHITE, len(game.plies) - 1)
@@ -106,7 +133,9 @@ def test_live_exits_after_redrawing_a_terminal_update(monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "_live_frame",
-        lambda game, console, perspective, first_ply: frames.append((len(game.plies), first_ply)),
+        lambda game, console, perspective, first_ply, **kwargs: frames.append(
+            (len(game.plies), first_ply)
+        ),
     )
 
     cli._live(Store(), active, Console(file=StringIO()), Color.WHITE)  # type: ignore[arg-type]

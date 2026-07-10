@@ -9,7 +9,12 @@ from .game import board_for
 from .models import Color, Game
 
 
-def board_table(board: chess.Board, perspective: Color = Color.WHITE) -> Table:
+def board_table(
+    board: chess.Board,
+    perspective: Color = Color.WHITE,
+    *,
+    unicode_pieces: bool = False,
+) -> Table:
     files = "abcdefgh" if perspective is Color.WHITE else "hgfedcba"
     file_indices = range(8) if perspective is Color.WHITE else range(7, -1, -1)
     ranks = range(8, 0, -1) if perspective is Color.WHITE else range(1, 9)
@@ -29,15 +34,22 @@ def board_table(board: chess.Board, perspective: Color = Color.WHITE) -> Table:
                 row.append(Text("  ", style=f"on {background}"))
             else:
                 foreground = "white" if piece.color else "black"
-                row.append(Text(f" {piece.symbol()}", style=f"{foreground} on {background}"))
+                symbol = piece.unicode_symbol() if unicode_pieces else piece.symbol()
+                row.append(Text(f" {symbol}", style=f"{foreground} on {background}"))
         row.append(Text(str(rank), style="bold"))
         table.add_row(*row)
     table.add_row(*labels)
     return table
 
 
-def render_board(board: chess.Board, console: Console, perspective: Color = Color.WHITE) -> None:
-    console.print(board_table(board, perspective))
+def render_board(
+    board: chess.Board,
+    console: Console,
+    perspective: Color = Color.WHITE,
+    *,
+    unicode_pieces: bool = False,
+) -> None:
+    console.print(board_table(board, perspective, unicode_pieces=unicode_pieces))
 
 
 def transcript_table(game: Game) -> Table:
@@ -53,6 +65,12 @@ def transcript_table(game: Game) -> Table:
     return table
 
 
-def render_game(game: Game, console: Console, perspective: Color = Color.WHITE) -> None:
+def render_game(
+    game: Game,
+    console: Console,
+    perspective: Color = Color.WHITE,
+    *,
+    unicode_pieces: bool = False,
+) -> None:
     console.print(transcript_table(game))
-    render_board(board_for(game), console, perspective)
+    render_board(board_for(game), console, perspective, unicode_pieces=unicode_pieces)

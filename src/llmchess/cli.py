@@ -18,12 +18,22 @@ def _add_json_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
 
+def _add_unicode_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--unicode",
+        action="store_true",
+        dest="unicode_pieces",
+        help="render pieces as Unicode chess symbols",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmchess", description="Play chess against an LLM")
     commands = parser.add_subparsers(dest="command", required=True)
 
     new = commands.add_parser("new", help="create a human-vs-LLM game")
     new.add_argument("--human", choices=Color, default=Color.WHITE, type=Color)
+    _add_unicode_flag(new)
     _add_json_flag(new)
 
     state = commands.add_parser("state", help="show complete machine-readable game state")
@@ -41,11 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
     show = commands.add_parser("show", help="render the board and transcript")
     show.add_argument("game_id")
     show.add_argument("--perspective", choices=Color, type=Color)
+    _add_unicode_flag(show)
     _add_json_flag(show)
 
     live = commands.add_parser("live", help="watch a game and redraw the latest position")
     live.add_argument("game_id")
     live.add_argument("--perspective", choices=Color, type=Color)
+    _add_unicode_flag(live)
 
     transcript = commands.add_parser("transcript", help="show all recorded moves")
     transcript.add_argument("game_id")
@@ -98,6 +110,8 @@ def _live_frame(
     console: Console,
     perspective: Color,
     first_ply: int,
+    *,
+    unicode_pieces: bool = False,
 ) -> None:
     console.clear()
     for index, ply in enumerate(game.plies[first_ply:], start=first_ply):
@@ -110,12 +124,19 @@ def _live_frame(
         if ply.explanation:
             console.print(ply.explanation)
     _summary(game, console)
-    render_board(board_for(game), console, perspective)
+    render_board(board_for(game), console, perspective, unicode_pieces=unicode_pieces)
 
 
-def _live(store: JsonGameStore, game: Game, console: Console, perspective: Color) -> None:
+def _live(
+    store: JsonGameStore,
+    game: Game,
+    console: Console,
+    perspective: Color,
+    *,
+    unicode_pieces: bool = False,
+) -> None:
     first_ply = max(0, len(game.plies) - 1)
-    _live_frame(game, console, perspective, first_ply)
+    _live_frame(game, console, perspective, first_ply, unicode_pieces=unicode_pieces)
     if game.status is GameStatus.TERMINAL:
         return
 
@@ -131,7 +152,7 @@ def _live(store: JsonGameStore, game: Game, console: Console, perspective: Color
                 else max(0, len(updated.plies) - 1)
             )
             game = updated
-            _live_frame(game, console, perspective, first_ply)
+            _live_frame(game, console, perspective, first_ply, unicode_pieces=unicode_pieces)
             if game.status is GameStatus.TERMINAL:
                 return
     except KeyboardInterrupt:
@@ -147,7 +168,7 @@ def _run(args: argparse.Namespace, console: Console) -> None:
             _emit_json(_state(game))
         else:
             _summary(game, console)
-            render_game(game, console, game.human_color)
+            render_game(game, console, game.human_color, unicode_pieces=args.unicode_pieces)
         return
 
     if args.command == "list":
@@ -207,11 +228,22 @@ def _run(args: argparse.Namespace, console: Console) -> None:
             _emit_json(_state(game))
         else:
             _summary(game, console)
-            render_game(game, console, args.perspective or game.human_color)
+            render_game(
+                game,
+                console,
+                args.perspective or game.human_color,
+                unicode_pieces=args.unicode_pieces,
+            )
         return
 
     if args.command == "live":
-        _live(store, game, console, args.perspective or game.human_color)
+        _live(
+            store,
+            game,
+            console,
+            args.perspective or game.human_color,
+            unicode_pieces=args.unicode_pieces,
+        )
         return
 
     if args.command == "transcript":
