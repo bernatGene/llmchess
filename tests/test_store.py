@@ -46,3 +46,28 @@ def test_store_uses_repository_games_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
     assert JsonGameStore().base_dir == tmp_path / "games"
+
+
+def test_generate_id_increments_base36_and_ignores_legacy_ids(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = JsonGameStore()
+
+    assert store.generate_id() == "0000"
+    store.base_dir.mkdir()
+    (store.base_dir / "0009.json").touch()
+    (store.base_dir / "g_legacy.json").touch()
+
+    assert store.generate_id() == "000a"
+
+
+def test_generate_id_carries_and_rejects_exhaustion(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = JsonGameStore()
+    store.base_dir.mkdir()
+    (store.base_dir / "00zz.json").touch()
+
+    assert store.generate_id() == "0100"
+
+    (store.base_dir / "zzzz.json").touch()
+    with pytest.raises(GameStoreError, match="game id space exhausted"):
+        store.generate_id()

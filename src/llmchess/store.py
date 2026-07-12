@@ -3,13 +3,16 @@
 import json
 import os
 import re
-import secrets
 import tempfile
 from pathlib import Path
+from string import ascii_lowercase, digits
 
 from .models import Game, GameValidationError
 
 _SAFE_ID = re.compile(r"\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\Z")
+_SHORT_ID = re.compile(r"\A[a-z0-9]{4}\Z")
+_ID_ALPHABET = digits + ascii_lowercase
+_MAX_SHORT_ID = len(_ID_ALPHABET) ** 4 - 1
 
 
 class GameStoreError(RuntimeError):
@@ -24,7 +27,24 @@ class JsonGameStore:
 
     def generate_id(self) -> str:
         """Generate an identifier suitable for a game filename."""
-        return f"g_{secrets.token_urlsafe(12).rstrip('=')}"
+        highest = -1
+        if self.base_dir.exists():
+            for path in self.base_dir.glob("*.json"):
+                if _SHORT_ID.fullmatch(path.stem):
+                    highest = max(highest, int(path.stem, base=len(_ID_ALPHABET)))
+
+        next_id = highest + 1
+        if next_id > _MAX_SHORT_ID:
+            raise GameStoreError("game id space exhausted")
+        return self._encode_short_id(next_id)
+
+    @staticmethod
+    def _encode_short_id(value: int) -> str:
+        encoded = ""
+        for _ in range(4):
+            value, remainder = divmod(value, len(_ID_ALPHABET))
+            encoded = _ID_ALPHABET[remainder] + encoded
+        return encoded
 
     def path_for(self, game_id: str) -> Path:
         if not _SAFE_ID.fullmatch(game_id):
