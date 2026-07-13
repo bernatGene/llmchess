@@ -23,16 +23,19 @@ def _add_board_style_flags(parser: argparse.ArgumentParser) -> None:
     styles = parser.add_mutually_exclusive_group()
     styles.add_argument(
         "--unicode",
-        action="store_true",
-        dest="unicode_pieces",
+        action="store_const",
+        const="unicode",
+        dest="board_style",
         help="render pieces as Unicode chess symbols",
     )
     styles.add_argument(
-        "--large",
-        action="store_true",
-        dest="large_pieces",
-        help="render a large board with pixel-art pieces",
+        "--minimal",
+        action="store_const",
+        const="minimal",
+        dest="board_style",
+        help="render a compact board with ASCII pieces",
     )
+    parser.set_defaults(board_style="large")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -234,8 +237,8 @@ def _run(args: argparse.Namespace, console: Console) -> None:
                 game,
                 console,
                 game.human_color,
-                unicode_pieces=args.unicode_pieces,
-                large_pieces=args.large_pieces,
+                unicode_pieces=args.board_style == "unicode",
+                large_pieces=args.board_style == "large",
             )
         return
 
@@ -343,8 +346,8 @@ def _run(args: argparse.Namespace, console: Console) -> None:
                 game,
                 console,
                 args.perspective or game.human_color,
-                unicode_pieces=args.unicode_pieces,
-                large_pieces=args.large_pieces,
+                unicode_pieces=args.board_style == "unicode",
+                large_pieces=args.board_style == "large",
             )
         return
 
@@ -354,8 +357,8 @@ def _run(args: argparse.Namespace, console: Console) -> None:
             game,
             console,
             args.perspective or game.human_color,
-            unicode_pieces=args.unicode_pieces,
-            large_pieces=args.large_pieces,
+            unicode_pieces=args.board_style == "unicode",
+            large_pieces=args.board_style == "large",
         )
         return
 

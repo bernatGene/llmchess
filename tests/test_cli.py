@@ -49,12 +49,31 @@ def test_large_board_uses_multicell_pixel_art() -> None:
 def test_board_style_flags_are_available_on_all_board_commands() -> None:
     parser = cli.build_parser()
 
-    assert parser.parse_args(["new", "--unicode"]).unicode_pieces is True
-    assert parser.parse_args(["show", "game-id", "--unicode"]).unicode_pieces is True
-    assert parser.parse_args(["live", "game-id", "--unicode"]).unicode_pieces is True
-    assert parser.parse_args(["new", "--large"]).large_pieces is True
-    assert parser.parse_args(["show", "game-id", "--large"]).large_pieces is True
-    assert parser.parse_args(["live", "game-id", "--large"]).large_pieces is True
+    assert parser.parse_args(["new"]).board_style == "large"
+    assert parser.parse_args(["show", "game-id"]).board_style == "large"
+    assert parser.parse_args(["live", "game-id"]).board_style == "large"
+    assert parser.parse_args(["new", "--unicode"]).board_style == "unicode"
+    assert parser.parse_args(["show", "game-id", "--unicode"]).board_style == "unicode"
+    assert parser.parse_args(["live", "game-id", "--unicode"]).board_style == "unicode"
+    assert parser.parse_args(["new", "--minimal"]).board_style == "minimal"
+    assert parser.parse_args(["show", "game-id", "--minimal"]).board_style == "minimal"
+    assert parser.parse_args(["live", "game-id", "--minimal"]).board_style == "minimal"
+
+
+def test_cli_uses_large_board_by_default_and_allows_compact_styles(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    styles: list[tuple[bool, bool]] = []
+    monkeypatch.setattr(
+        cli,
+        "render_game",
+        lambda *args, **kwargs: styles.append((kwargs["unicode_pieces"], kwargs["large_pieces"])),
+    )
+
+    assert main(["new"]) == 0
+    assert main(["new", "--minimal"]) == 0
+    assert main(["new", "--unicode"]) == 0
+
+    assert styles == [(False, True), (False, False), (True, False)]
 
 
 def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, monkeypatch, capsys) -> None:

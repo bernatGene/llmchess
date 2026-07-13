@@ -42,16 +42,20 @@ Games are stored in the gitignored `games/` directory.
 ## CLI
 
 ```text
-llmchess new [--human white|black] [--unicode|--large] [--json]
+llmchess new [--human white|black] [--minimal|--unicode] [--json]
 llmchess list [--json]
 llmchess state GAME_ID [--json]
 llmchess move GAME_ID MOVE --actor human|llm [--explanation TEXT] [--model ID] [--json]
 llmchess try-line GAME_ID MOVE [MOVE ...] [--json]
 llmchess piece-moves GAME_ID SQUARE [--line MOVE ...] [--json]
-llmchess show GAME_ID [--perspective white|black] [--unicode|--large] [--json]
-llmchess live GAME_ID [--perspective white|black] [--unicode|--large]
+llmchess show GAME_ID [--perspective white|black] [--minimal|--unicode] [--json]
+llmchess live GAME_ID [--perspective white|black] [--minimal|--unicode]
 llmchess transcript GAME_ID [--json]
 ```
+
+Board commands render the large pixel-art board by default. Use `--minimal` for
+the compact board with ASCII piece letters, or `--unicode` for the compact board
+with Unicode chess symbols.
 
 Use `uv run llmchess --help` or `uv run llmchess COMMAND --help` for details.
 
