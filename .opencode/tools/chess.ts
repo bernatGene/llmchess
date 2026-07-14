@@ -9,7 +9,7 @@ type CompactPosition =
       side_to_move: string
       fen: string
       board: string[]
-      legal_moves: Array<{ uci: string; san: string }>
+      legal_moves: string[]
     }
   | { game_id: string; status: "active"; waiting: "human_move" }
   | { result: string; termination: string }
@@ -81,6 +81,15 @@ function terminal(state: JsonObject): { result: string; termination: string } | 
   return { result, termination }
 }
 
+function legalSans(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error("llmchess returned invalid legal moves")
+  return value.map((move) => {
+    const san = string(object(move)?.san)
+    if (!san) throw new Error("llmchess returned an invalid legal move")
+    return san
+  })
+}
+
 function compactPosition(payload: unknown): CompactPosition {
   const state = object(payload)
   if (!state) throw new Error("llmchess returned an invalid game state")
@@ -100,25 +109,17 @@ function compactPosition(payload: unknown): CompactPosition {
   const sideToMove = string(state.turn)
   const fen = string(state.fen)
   const board = Array.isArray(state.board) ? state.board : undefined
-  const moves = Array.isArray(state.legal_moves) ? state.legal_moves : undefined
   if (
     !sideToMove ||
     !fen ||
     !board ||
     board.length !== 8 ||
-    !board.every((row) => typeof row === "string" && row.length === 8) ||
-    !moves
+    !board.every((row) => typeof row === "string" && row.length === 8)
   ) {
     throw new Error("llmchess returned an invalid LLM position")
   }
 
-  const legalMoves = moves.map((move) => {
-    const entry = object(move)
-    const uci = string(entry?.uci)
-    const san = string(entry?.san)
-    if (!uci || !san) throw new Error("llmchess returned an invalid legal move")
-    return { uci, san }
-  })
+  const legalMoves = legalSans(state.legal_moves)
   return { game_id: id, status: "active", side_to_move: sideToMove, fen, board, legal_moves: legalMoves }
 }
 
@@ -136,7 +137,10 @@ function boundedAnalysis(payload: unknown): JsonObject {
   const nextCalls = calls + 1
   analysisUsage.set(id, { fen: baseFen, calls: nextCalls })
 
-  const { base_fen: _, ...result } = state
+  const result = { ...state }
+  delete result.base_fen
+  delete result.game_id
+  result.legal_moves = legalSans(state.legal_moves)
   return { ...result, analysis_calls_remaining: ANALYSIS_CALL_LIMIT - nextCalls }
 }
 
@@ -158,7 +162,7 @@ function imageResult(payload: unknown) {
   imageUsage.set(id, fen)
   return {
     title: `Board ${id}`,
-    output: output({ game_id: id, fen, perspective }),
+    output: output({ fen }),
     attachments: [
       {
         type: "file" as const,
@@ -210,7 +214,7 @@ export const human_move = tool({
 })
 
 export const llm_move = tool({
-  description: "Apply one legal LLM UCI move with its concise public explanation.",
+  description: "Apply one legal LLM SAN move with its concise public explanation.",
   args: { game_id: gameId, move: notation, explanation },
   async execute(args, context) {
     const payload = object(
@@ -220,19 +224,16 @@ export const llm_move = tool({
       ),
     )
     const applied = object(payload?.applied)
-    const uci = string(applied?.uci)
     const san = string(applied?.san)
     const state = object(payload?.game)
-    if (!uci || !san || !state) throw new Error("llmchess returned an invalid move response")
+    if (!san || !state) throw new Error("llmchess returned an invalid move response")
 
     const finished = terminal(state)
     if (finished) return output(finished)
     if (state.status !== "active") throw new Error("llmchess returned an invalid active state")
     const nextActor = string(state.expected_actor)
-    if (nextActor !== "human" && nextActor !== "llm") {
-      throw new Error("llmchess returned an unknown expected actor")
-    }
-    return output({ accepted: { uci, san }, next_actor: nextActor })
+    if (nextActor !== "human") throw new Error("llmchess returned an invalid next actor")
+    return output({ accepted: san })
   },
 })
 
@@ -248,13 +249,13 @@ export const resign = tool({
     if (!finished || finished.termination !== "resignation") {
       throw new Error("llmchess returned an invalid resignation state")
     }
-    return output({ ...finished, reason: args.reason })
+    return output(finished)
   },
 })
 
 export const try_line = tool({
   description:
-    "Try a non-persistent legal line of one to three plies and see the resulting compact position. Shares a two-call budget per LLM turn with chess_piece_moves.",
+    "Try a non-persistent legal SAN line of one to three plies and see the resulting compact position. Shares a two-call budget per LLM turn with chess_piece_moves.",
   args: { game_id: gameId, moves: analysisLine.min(1) },
   async execute(args, context) {
     return output(
@@ -265,7 +266,7 @@ export const try_line = tool({
 
 export const piece_moves = tool({
   description:
-    "See one piece's attacked squares and current legal moves, optionally after a non-persistent line of up to three plies. Shares a two-call budget per LLM turn with chess_try_line.",
+    "See one piece's attacked squares and current legal SAN moves, optionally after a non-persistent SAN line of up to three plies. Shares a two-call budget per LLM turn with chess_try_line.",
   args: { game_id: gameId, square, line: analysisLine },
   async execute(args, context) {
     const cliArgs = ["piece-moves", args.game_id, args.square]

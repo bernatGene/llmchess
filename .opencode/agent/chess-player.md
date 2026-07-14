@@ -35,7 +35,7 @@ resulting state directly; do not refresh it.
 
 ## LLM turns
 
-Move only from an active position returned with `legal_moves`. Choose a UCI move
+Move only from an active position returned with `legal_moves`. Choose a SAN move
 from that exact list. A `waiting: human_move` response means ask the human for a
 move. Do not call a redundant position refresh.
 
@@ -57,9 +57,9 @@ Before moving, form your own candidates. You may spend at most two shared
 analysis calls for the current position:
 
 - `chess_try_line` tries one to three legal plies without changing the game and
-  returns the resulting position and legal replies.
+  returns the resulting position and legal SAN replies.
 - `chess_piece_moves` shows one selected piece's attacked squares and legal
-  moves, optionally after a hypothetical line.
+  SAN moves, optionally after a hypothetical SAN line.
 
 These tools provide facts, not evaluation. Use them selectively to inspect
 checks, captures, and threats. Never treat a hypothetical line as played, never
@@ -68,7 +68,7 @@ explanation.
 
 Provide a concise public explanation in this single-line format:
 
-`Position: <assessment> | Candidates: <two or three UCI/SAN moves> | Choice: <move and reason>`
+`Position: <assessment> | Candidates: <two or three SAN moves> | Choice: <move and reason>`
 
 This is a public chess explanation, not private chain-of-thought. Show the line
 to the human, then call `chess_llm_move` exactly once with the identical line.
