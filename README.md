@@ -39,6 +39,32 @@ a game later, use `/chess GAME_ID` and run the same `live` command.
 
 Games are stored in the gitignored `games/` directory.
 
+## Run an LLM Match
+
+Select two models using their OpenCode `provider/model` identifiers:
+
+```sh
+uv run llmchess match \
+  --white-model PROVIDER/WHITE_MODEL \
+  --black-model PROVIDER/BLACK_MODEL \
+  --minimal
+```
+
+The command creates two complementary games, one for each model, and relays every
+accepted move between them. It prints both game IDs and each model's OpenCode
+session ID when available. The game IDs remain usable with `state`, `show`,
+`transcript`, and `live` if the match stops.
+
+Each move attempt has 120 seconds by default. Use `--move-timeout SECONDS` to
+change it. After one timeout the same model session receives an urgent warning;
+after a second timeout on that ply, the coordinator plays a random legal move.
+A move persisted just before a timeout is accepted and is never duplicated.
+
+Matches run to a chess outcome or resignation by default. `--max-plies N` stops
+successfully at an active synchronized position without recording a draw. Ctrl-C
+stops and reaps the active OpenCode process, reports recovery IDs, and exits with
+status 130.
+
 ## CLI
 
 ```text
@@ -53,6 +79,7 @@ llmchess show GAME_ID [--perspective white|black] [--minimal|--unicode] [--json]
 llmchess live GAME_ID [--perspective white|black] [--minimal|--unicode]
 llmchess image GAME_ID [--perspective white|black] [--output PATH] [--json]
 llmchess transcript GAME_ID [--json]
+llmchess match --white-model PROVIDER/MODEL --black-model PROVIDER/MODEL [--move-timeout SECONDS] [--max-plies N] [--minimal|--unicode]
 ```
 
 Board commands render the large pixel-art board by default. Use `--minimal` for

@@ -3,6 +3,7 @@ import json
 from io import BytesIO, StringIO
 
 import chess
+import pytest
 from PIL import Image
 from rich.console import Console
 
@@ -74,6 +75,55 @@ def test_board_style_flags_are_available_on_all_board_commands() -> None:
     assert parser.parse_args(["new", "--minimal"]).board_style == "minimal"
     assert parser.parse_args(["show", "game-id", "--minimal"]).board_style == "minimal"
     assert parser.parse_args(["live", "game-id", "--minimal"]).board_style == "minimal"
+    match = parser.parse_args(
+        ["match", "--white-model", "test/white", "--black-model", "test/black"]
+    )
+    assert match.board_style == "large"
+    assert match.move_timeout == 120.0
+    assert match.max_plies is None
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--move-timeout", "0"],
+        ["--move-timeout", "-1"],
+        ["--move-timeout", "nan"],
+        ["--move-timeout", "inf"],
+        ["--max-plies", "0"],
+        ["--max-plies", "-1"],
+    ],
+)
+def test_match_parser_rejects_nonpositive_limits(arguments: list[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "match",
+                "--white-model",
+                "test/white",
+                "--black-model",
+                "test/black",
+                *arguments,
+            ]
+        )
+
+
+def test_match_parser_rejects_model_without_provider() -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["match", "--white-model", "white", "--black-model", "test/black"])
+
+
+def test_match_cli_returns_130_after_coordinator_interruption(monkeypatch) -> None:
+    def interrupt(*args, **kwargs) -> None:
+        raise cli.MatchInterrupted
+
+    monkeypatch.setattr(cli, "run_match", interrupt)
+
+    assert main(["match", "--white-model", "test/white", "--black-model", "test/black"]) == 130
 
 
 def test_cli_uses_large_board_by_default_and_allows_compact_styles(tmp_path, monkeypatch) -> None:

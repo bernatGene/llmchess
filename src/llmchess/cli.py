@@ -3,6 +3,7 @@
 import argparse
 import base64
 import json
+import math
 import sys
 import time
 from collections.abc import Sequence
@@ -12,6 +13,7 @@ import chess
 from rich.console import Console
 
 from .game import actor_for, apply_move, board_after_line, board_for, resign_game
+from .match import MatchInterrupted, run_match
 from .models import Actor, Color, Game, GameStatus
 from .render import board_png, render_board, render_game, transcript_table
 from .store import GameStoreError, JsonGameStore
@@ -38,6 +40,33 @@ def _add_board_style_flags(parser: argparse.ArgumentParser) -> None:
         help="render a compact board with ASCII pieces",
     )
     parser.set_defaults(board_style="large")
+
+
+def _positive_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return parsed
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return parsed
+
+
+def _model_id(value: str) -> str:
+    provider, separator, model = value.partition("/")
+    if not separator or not provider or not model:
+        raise argparse.ArgumentTypeError("must use provider/model form")
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -102,6 +131,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     listing = commands.add_parser("list", help="list saved games")
     _add_json_flag(listing)
+
+    match = commands.add_parser("match", help="run two OpenCode models against each other")
+    match.add_argument(
+        "--white-model", required=True, type=_model_id, help="OpenCode provider/model for White"
+    )
+    match.add_argument(
+        "--black-model", required=True, type=_model_id, help="OpenCode provider/model for Black"
+    )
+    match.add_argument("--move-timeout", type=_positive_float, default=120.0)
+    match.add_argument("--max-plies", type=_positive_int)
+    _add_board_style_flags(match)
     return parser
 
 
@@ -239,6 +279,18 @@ def _live(
 
 def _run(args: argparse.Namespace, console: Console) -> None:
     store = JsonGameStore()
+    if args.command == "match":
+        run_match(
+            store,
+            console,
+            white_model=args.white_model,
+            black_model=args.black_model,
+            move_timeout=args.move_timeout,
+            max_plies=args.max_plies,
+            board_style=args.board_style,
+        )
+        return
+
     if args.command == "new":
         game = Game(id=store.generate_id(), human_color=args.human)
         store.create(game)
@@ -418,6 +470,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     console = Console(stderr=False)
     try:
         _run(args, console)
+    except MatchInterrupted:
+        return 130
     except (FileNotFoundError, GameStoreError, ValueError) as error:
         if getattr(args, "json", False):
             _emit_json({"error": str(error), "type": type(error).__name__}, error=True)

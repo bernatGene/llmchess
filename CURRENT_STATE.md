@@ -22,6 +22,9 @@ view, not the individual task at hand.
   trying lines up to three plies or inspecting one piece's moves and attacks
 - LLM moves retain concise public chess explanations and an optional model ID
 - The LLM can resign on its turn, persistently awarding the human the win
+- `llmchess match` runs two selected OpenCode models through separate sessions
+  and two synchronized complementary games, with bounded turns, one timeout
+  retry, random legal fallback, maximum-ply stopping, and Ctrl-C recovery IDs
 - Tooling: `uv`, `ruff` (formatter/linter), `ty` (type checker), and `pytest`
 
 
