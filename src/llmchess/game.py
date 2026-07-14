@@ -103,8 +103,28 @@ def _set_outcome(game: Game, board: chess.Board) -> None:
 def synchronize_outcome(game: Game) -> chess.Board:
     """Derive persisted outcome fields from the replayed position."""
     board = board_for(game)
-    _set_outcome(game, board)
+    if game.termination is not Termination.RESIGNATION:
+        _set_outcome(game, board)
     return board
+
+
+def resign_game(game: Game, *, actor: Actor) -> None:
+    """Record the LLM's resignation on its turn."""
+    board = synchronize_outcome(game)
+    if game.status is GameStatus.TERMINAL:
+        raise MoveError("game is terminal")
+    turn = Color.from_chess(board.turn)
+    expected_actor = actor_for(game, turn)
+    if actor is not expected_actor:
+        raise MoveError(f"expected {expected_actor.value} actor for {turn.value}")
+    if actor is not Actor.LLM:
+        raise MoveError("only the LLM can resign")
+
+    game.status = GameStatus.TERMINAL
+    game.result = (
+        GameResult.WHITE_WIN if game.human_color is Color.WHITE else GameResult.BLACK_WIN
+    )
+    game.termination = Termination.RESIGNATION
 
 
 def apply_move(

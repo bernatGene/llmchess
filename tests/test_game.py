@@ -2,7 +2,14 @@ from copy import deepcopy
 
 import pytest
 
-from llmchess.game import MoveError, actor_for, apply_move, board_after_line, board_for
+from llmchess.game import (
+    MoveError,
+    actor_for,
+    apply_move,
+    board_after_line,
+    board_for,
+    resign_game,
+)
 from llmchess.models import (
     Actor,
     Color,
@@ -121,3 +128,25 @@ def test_hypothetical_line_is_bounded_and_only_available_on_llm_turn() -> None:
         board_after_line(llm_turn, ["e4", "e5", "Nf3", "Nc6"])
     with pytest.raises(MoveError, match="expected human actor"):
         board_after_line(human_turn, ["e4"])
+
+
+def test_llm_resignation_awards_the_human_a_win_and_prevents_more_moves() -> None:
+    game = Game(id="resigned", human_color=Color.BLACK)
+
+    resign_game(game, actor=Actor.LLM)
+
+    assert game.status is GameStatus.TERMINAL
+    assert game.result is GameResult.BLACK_WIN
+    assert game.termination is Termination.RESIGNATION
+    assert Game.from_dict(game.to_dict()) == game
+    with pytest.raises(MoveError, match="game is terminal"):
+        apply_move(game, "e4", actor=Actor.LLM, explanation="Changed my mind.")
+
+
+def test_resignation_is_only_available_to_the_llm_on_its_turn() -> None:
+    game = Game(id="human-turn", human_color=Color.WHITE)
+
+    with pytest.raises(MoveError, match="expected human actor"):
+        resign_game(game, actor=Actor.LLM)
+    with pytest.raises(MoveError, match="only the LLM can resign"):
+        resign_game(game, actor=Actor.HUMAN)

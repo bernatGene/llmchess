@@ -17,10 +17,12 @@ type CompactPosition =
 const gameId = tool.schema.string().min(1).max(128)
 const notation = tool.schema.string().min(1).max(32)
 const explanation = tool.schema.string().trim().min(1).max(500)
+const resignationReason = tool.schema.string().trim().min(1).max(240)
 const square = tool.schema.string().regex(/^[a-h][1-8]$/)
 const analysisLine = tool.schema.array(notation).max(3)
 const ANALYSIS_CALL_LIMIT = 2
 const analysisUsage = new Map<string, { fen: string; calls: number }>()
+const imageUsage = new Map<string, string>()
 
 function object(value: unknown): JsonObject | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -142,6 +144,32 @@ function output(value: object): string {
   return JSON.stringify(value)
 }
 
+function imageResult(payload: unknown) {
+  const state = object(payload)
+  const id = string(state?.game_id)
+  const fen = string(state?.fen)
+  const perspective = string(state?.perspective)
+  const mime = string(state?.mime)
+  const png = string(state?.png_base64)
+  if (!id || !fen || perspective !== "white" || mime !== "image/png" || !png?.startsWith("iVBOR")) {
+    throw new Error("llmchess returned invalid board image data")
+  }
+  if (imageUsage.get(id) === fen) throw new Error("board image already viewed for this position")
+  imageUsage.set(id, fen)
+  return {
+    title: `Board ${id}`,
+    output: output({ game_id: id, fen, perspective }),
+    attachments: [
+      {
+        type: "file" as const,
+        mime,
+        url: `data:${mime};base64,${png}`,
+        filename: `${id.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`,
+      },
+    ],
+  }
+}
+
 const newGame = tool({
   description: "Create a chess game for a human color and return its compact current state.",
   args: { human: tool.schema.enum(["white", "black"]) },
@@ -157,6 +185,15 @@ export const position = tool({
   args: { game_id: gameId },
   async execute(args, context) {
     return output(compactPosition(await runCli(["state", args.game_id], context.worktree)))
+  },
+})
+
+export const board_image = tool({
+  description:
+    "View the current board as a 256x256 PNG from White's perspective. Use at most once per position and only with a model that supports image input.",
+  args: { game_id: gameId },
+  async execute(args, context) {
+    return imageResult(await runCli(["image", args.game_id], context.worktree))
   },
 })
 
@@ -196,6 +233,22 @@ export const llm_move = tool({
       throw new Error("llmchess returned an unknown expected actor")
     }
     return output({ accepted: { uci, san }, next_actor: nextActor })
+  },
+})
+
+export const resign = tool({
+  description:
+    "Resign the active game for the LLM when it concludes it cannot reasonably win or no longer wants to continue. This immediately awards the human a win.",
+  args: { game_id: gameId, reason: resignationReason },
+  async execute(args, context) {
+    const state = object(
+      await runCli(["resign", args.game_id, "--actor", "llm"], context.worktree),
+    )
+    const finished = state && terminal(state)
+    if (!finished || finished.termination !== "resignation") {
+      throw new Error("llmchess returned an invalid resignation state")
+    }
+    return output({ ...finished, reason: args.reason })
   },
 })
 

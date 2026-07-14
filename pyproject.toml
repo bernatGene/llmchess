@@ -5,6 +5,7 @@ description = "A chess harness for playing against an OpenCode LLM agent"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pillow>=11.0.0",
     "python-chess>=1.999",
     "rich>=14.3.3",
 ]

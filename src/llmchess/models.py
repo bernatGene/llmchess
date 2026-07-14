@@ -52,6 +52,7 @@ class Termination(StrEnum):
     VARIANT_WIN = "variant_win"
     VARIANT_LOSS = "variant_loss"
     VARIANT_DRAW = "variant_draw"
+    RESIGNATION = "resignation"
 
 
 def utc_now() -> datetime:
@@ -166,6 +167,15 @@ class Game:
 
         outcome = board.outcome(claim_draw=True)
         if outcome is None:
+            if self.termination is Termination.RESIGNATION:
+                expected_result = (
+                    GameResult.BLACK_WIN
+                    if self.human_color is Color.BLACK
+                    else GameResult.WHITE_WIN
+                )
+                if self.status is not GameStatus.TERMINAL or self.result is not expected_result:
+                    raise GameValidationError("resignation must record a win for the human")
+                return
             if (
                 self.status is not GameStatus.ACTIVE
                 or self.result is not None

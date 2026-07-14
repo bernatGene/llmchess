@@ -1,8 +1,10 @@
 """Rich presentation helpers kept outside the chess domain."""
 
 from importlib.resources import files
+from io import BytesIO
 
 import chess
+from PIL import Image, ImageColor
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
@@ -15,6 +17,7 @@ _LIGHT_SQUARE = "#e0b97d"
 _DARK_SQUARE = "#b58863"
 _BLACK_PIECE = "#000000"
 _WHITE_PIECE = "#ffffff"
+_BOARD_IMAGE_SIZE = 256
 
 
 def _load_piece_mask(name: str) -> tuple[str, ...]:
@@ -36,6 +39,50 @@ _LARGE_PIECES = {
     chess.KNIGHT: _load_piece_mask("knight"),
     chess.PAWN: _load_piece_mask("pawn"),
 }
+
+
+def board_png(
+    board: chess.Board,
+    perspective: Color = Color.WHITE,
+    *,
+    size: int = _BOARD_IMAGE_SIZE,
+) -> bytes:
+    """Render the terminal pixel-art board as a nearest-neighbor PNG."""
+    logical_size = 8 * _LARGE_SQUARE_SIZE
+    image = Image.new("RGB", (logical_size, logical_size))
+    file_indices = range(8) if perspective is Color.WHITE else range(7, -1, -1)
+    rank_indices = range(7, -1, -1) if perspective is Color.WHITE else range(8)
+
+    for board_row, rank_index in enumerate(rank_indices):
+        for board_column, file_index in enumerate(file_indices):
+            piece = board.piece_at(chess.square(file_index, rank_index))
+            square_color = _LIGHT_SQUARE if (file_index + rank_index + 1) % 2 == 0 else _DARK_SQUARE
+            background = ImageColor.getrgb(square_color)
+            foreground = ImageColor.getrgb(
+                _WHITE_PIECE if piece is not None and piece.color else _BLACK_PIECE
+            )
+            mask = _LARGE_PIECES[piece.piece_type] if piece is not None else None
+            for pixel_y in range(_LARGE_SQUARE_SIZE):
+                for pixel_x in range(_LARGE_SQUARE_SIZE):
+                    color = (
+                        foreground
+                        if mask is not None and mask[pixel_y][pixel_x] == "#"
+                        else background
+                    )
+                    image.putpixel(
+                        (
+                            board_column * _LARGE_SQUARE_SIZE + pixel_x,
+                            board_row * _LARGE_SQUARE_SIZE + pixel_y,
+                        ),
+                        color,
+                    )
+
+    if size <= 0:
+        raise ValueError("board image size must be positive")
+    image = image.resize((size, size), Image.Resampling.NEAREST)
+    output = BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
 
 
 def _large_piece_rows(piece: chess.Piece | None, square_color: str) -> list[Text]:

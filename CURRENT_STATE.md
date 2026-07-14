@@ -15,9 +15,13 @@ view, not the individual task at hand.
   resuming games through compact custom tools
 - Agent position responses contain FEN, compact ASCII occupancy, and legal moves,
   while the human can run a live board display in a separate terminal
+- Vision-capable agents are explicitly instructed to inspect one 256x256
+  pixel-art PNG per LLM position as a direct tool attachment; text-only models
+  retain the complete textual path
 - The chess agent has two shared, non-persistent analysis calls per LLM turn for
   trying lines up to three plies or inspecting one piece's moves and attacks
 - LLM moves retain concise public chess explanations and an optional model ID
+- The LLM can resign on its turn, persistently awarding the human the win
 - Tooling: `uv`, `ruff` (formatter/linter), `ty` (type checker), and `pytest`
 
 

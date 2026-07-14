@@ -1,14 +1,16 @@
+import base64
 import json
-from io import StringIO
+from io import BytesIO, StringIO
 
 import chess
+from PIL import Image
 from rich.console import Console
 
 import llmchess.cli as cli
 from llmchess.cli import main
 from llmchess.game import apply_move
 from llmchess.models import Actor, Color, Game
-from llmchess.render import render_board
+from llmchess.render import board_png, render_board
 from llmchess.store import JsonGameStore
 
 
@@ -44,6 +46,20 @@ def test_large_board_uses_multicell_pixel_art() -> None:
     assert len(rendered.splitlines()) == 34
     assert len(rendered.splitlines()[1]) >= 66
     assert " " not in rendered.splitlines()[1].strip()
+
+
+def test_board_png_upscales_pixel_masks_and_respects_perspective() -> None:
+    board = chess.Board(None)
+    board.set_piece_at(chess.A8, chess.Piece(chess.KING, chess.WHITE))
+
+    white = Image.open(BytesIO(board_png(board, Color.WHITE)))
+    black = Image.open(BytesIO(board_png(board, Color.BLACK)))
+
+    assert white.size == (256, 256)
+    assert white.format == "PNG"
+    assert white.getpixel((14, 6)) == (255, 255, 255)
+    assert black.getpixel((238, 230)) == (255, 255, 255)
+    assert white.getpixel((14, 6)) != white.getpixel((10, 6))
 
 
 def test_board_style_flags_are_available_on_all_board_commands() -> None:
@@ -117,6 +133,22 @@ def test_cli_json_human_vs_llm_game_persists_explanation(tmp_path, monkeypatch, 
     assert shown["turn"] == "white"
 
 
+def test_cli_image_returns_current_fen_and_png(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert main(["new", "--json"]) == 0
+    game_id = json.loads(capsys.readouterr().out)["id"]
+
+    assert main(["image", game_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    image = Image.open(BytesIO(base64.b64decode(payload["png_base64"])))
+
+    assert payload["game_id"] == game_id
+    assert payload["fen"] == chess.Board().fen()
+    assert payload["perspective"] == "white"
+    assert payload["mime"] == "image/png"
+    assert image.size == (256, 256)
+
+
 def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     assert main(["new", "--json"]) == 0
@@ -131,6 +163,21 @@ def test_cli_returns_nonzero_json_error_for_invalid_move(tmp_path, monkeypatch, 
         "error": "expected human actor for white",
         "type": "MoveError",
     }
+
+
+def test_cli_llm_resignation_persists_terminal_result(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert main(["new", "--human", "black", "--json"]) == 0
+    game_id = json.loads(capsys.readouterr().out)["id"]
+
+    assert main(["resign", game_id, "--actor", "llm", "--json"]) == 0
+    resigned = json.loads(capsys.readouterr().out)
+
+    assert resigned["status"] == "terminal"
+    assert resigned["result"] == "0-1"
+    assert resigned["termination"] == "resignation"
+    assert main(["state", game_id, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["termination"] == "resignation"
 
 
 def test_cli_analysis_shows_board_and_piece_attacks_without_persisting(

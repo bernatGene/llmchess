@@ -1,17 +1,19 @@
 """Finite command-line interface for humans and OpenCode agents."""
 
 import argparse
+import base64
 import json
 import sys
 import time
 from collections.abc import Sequence
+from pathlib import Path
 
 import chess
 from rich.console import Console
 
-from .game import actor_for, apply_move, board_after_line, board_for
+from .game import actor_for, apply_move, board_after_line, board_for, resign_game
 from .models import Actor, Color, Game, GameStatus
-from .render import render_board, render_game, transcript_table
+from .render import board_png, render_board, render_game, transcript_table
 from .store import GameStoreError, JsonGameStore
 
 
@@ -59,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     move.add_argument("--model", help="optional model identifier")
     _add_json_flag(move)
 
+    resign = commands.add_parser("resign", help="end the game by LLM resignation")
+    resign.add_argument("game_id")
+    resign.add_argument("--actor", choices=Actor, required=True, type=Actor)
+    _add_json_flag(resign)
+
     try_line = commands.add_parser("try-line", help="inspect a non-persistent move line")
     try_line.add_argument("game_id")
     try_line.add_argument("notations", nargs="+")
@@ -82,6 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("game_id")
     live.add_argument("--perspective", choices=Color, type=Color)
     _add_board_style_flags(live)
+
+    image = commands.add_parser("image", help="render the current board as a PNG")
+    image.add_argument("game_id")
+    image.add_argument("--perspective", choices=Color, default=Color.WHITE, type=Color)
+    image.add_argument("--output", type=Path, help="write the PNG to this path")
+    _add_json_flag(image)
 
     transcript = commands.add_parser("transcript", help="show all recorded moves")
     transcript.add_argument("game_id")
@@ -266,6 +279,26 @@ def _run(args: argparse.Namespace, console: Console) -> None:
         return
 
     game = store.load(args.game_id)
+    if args.command == "image":
+        board = board_for(game)
+        png = board_png(board, args.perspective)
+        if args.json:
+            _emit_json(
+                {
+                    "game_id": game.id,
+                    "fen": board.fen(),
+                    "perspective": args.perspective.value,
+                    "mime": "image/png",
+                    "png_base64": base64.b64encode(png).decode("ascii"),
+                }
+            )
+        else:
+            if args.output is None:
+                raise ValueError("--output is required unless --json is used")
+            args.output.write_bytes(png)
+            console.print(f"Board image written to {args.output}", style="green")
+        return
+
     if args.command == "state":
         if args.json:
             _emit_json(_state(game))
@@ -291,6 +324,16 @@ def _run(args: argparse.Namespace, console: Console) -> None:
             _emit_json(payload)
         else:
             console.print(f"Move accepted: {ply.san} ({ply.uci})", style="green")
+            _summary(game, console)
+        return
+
+    if args.command == "resign":
+        resign_game(game, actor=args.actor)
+        store.save(game)
+        if args.json:
+            _emit_json(_state(game))
+        else:
+            console.print("LLM resigned.", style="yellow")
             _summary(game, console)
         return
 
